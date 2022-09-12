@@ -123,6 +123,10 @@ fn main() {
         }
     });
 
+    /*
+        PROVISION FILE
+    */
+
     if ask_proceed(
         String::from(
             "Do you want to sync variables from vault to provision file (.env.provision)?",
@@ -153,7 +157,12 @@ fn main() {
 
         unsynced_fields.iter().for_each(|field| {
             let field_label = field.clone().label.clone();
-            let selected_section_label = selected_section.label.clone();
+
+            let selected_section_label = if use_env_for_section {
+                Some(String::from("$OP_ENV"))
+            } else {
+                selected_section.label.clone()
+            };
 
             match (field_label, selected_section_label) {
                 (Some(field_label), Some(selected_section_label)) => {
@@ -190,103 +199,4 @@ fn main() {
     }
 
     println!("Done!");
-
-    // env_vars.0.iter().for_each(|env| {
-    //     if !ask_proceed(format!("Do you want to sync {} ?", env.key)) {
-    //         println!("Skipping {}", env.key);
-
-    //         return;
-    //     }
-
-    // let saved_provision_path = provision_paths
-    //     .iter()
-    //     .find(|provision| provision.key == env.key);
-
-    // // provision_path = op://Cake/.env/$OP_ENV/PREVIEW_SECRET
-
-    // let provision_path = "op://vault/item/section/env.key";
-
-    // let op_item = op_read(format!(
-    //     "op://{}/{}/{}/{}",
-    //     selected_vault.id, selected_item.id, selected_section.id, env.key
-    // ));
-
-    // println!("op_item {:?}", op_item);
-    // println!("env.value {:?}", env.value);
-
-    // if !op_item || op_item !== env.value {
-    //     op_edit(vault, item, "section.env[text]=env.value");
-    // }
-
-    // if !saved_provision_path || saved_provision_path !== provision_path {
-    //     synced_provision_paths.push("op://vault/item/section/env.key");
-    // }
-    // });
-
-    // if (synced_provision_paths.len() > 0) {
-    //     write_to_provision_file(synced_provision_paths);
-    // }
 }
-
-// fn main() {
-//     let env_file_path = get_argument_or_default(1, ".env");
-//     let provision_file_path = get_argument_or_default(2, ".env.provision");
-
-//     let op_signed_in = op_whoami();
-
-//     if !op_signed_in {
-//         println!("You are not logged in to 1password CLI. Proceeding to log in...");
-
-//         op_sign_in();
-//     }
-
-//     let env_file_contents = fs::read_to_string(&env_file_path).unwrap_or_else(|_| {
-//         println!("Could not read environment file at {}", &env_file_path);
-//         process::exit(1)
-//     });
-
-//     let provision_file_contents =
-//         fs::read_to_string(&provision_file_path).unwrap_or(String::from(""));
-
-//     let env_vars = parse_env_file(env_file_contents);
-//     let provision_vars = parse_env_file(provision_file_contents);
-
-//     let unsynced_env_vars = compare_env_vars(&env_vars, &provision_vars);
-
-//     let unsynced_env_var_keys: Vec<&String> =
-//         unsynced_env_vars.iter().map(|env| &env.key).collect();
-
-//     let keys_to_sync = inquire::MultiSelect::new(
-//         "Select environment variables to sync:",
-//         unsynced_env_var_keys,
-//     )
-//     .prompt()
-//     .expect("Could not read keys!");
-
-//     let vaults = op_get_vaults();
-
-//     let vault_names: Vec<&String> = vaults.iter().map(|vault| &vault.name).collect();
-
-//     let selected_vault = inquire::Select::new("Select vault:", vault_names)
-//         .prompt()
-//         .expect("No vault selected");
-
-//     let items = op_get_items(selected_vault);
-
-//     let item_names: Vec<&String> = items.iter().map(|item| &item.title).collect();
-
-//     let selected_item_name = inquire::Select::new("Select item:", item_names)
-//         .prompt()
-//         .expect("No item selected");
-
-//     let selected_item = items
-//         .iter()
-//         .find(|item| item.title.eq(selected_item_name))
-//         .expect("Could not select item");
-
-//     let item_details = op_get_item(&selected_item.id);
-
-//     println!("{:?}", item_details);
-
-//     // let sections = op_get_sections(selected_item);
-// }
