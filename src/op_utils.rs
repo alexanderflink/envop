@@ -1,32 +1,172 @@
-use serde::{Deserialize, Serialize};
+use crate::utils::strip_trailing_newline;
+use core::fmt;
+use serde::{de, Deserialize, Serialize};
 use serde_json::{Result, Value};
 use std::process;
-use std::process::Command;
+use std::process::{Command, ExitStatus, Output, Stdio};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OPVault {
     pub id: String,
     pub name: String,
 }
 
-pub fn op_get_vaults() -> Vec<OPVault> {
-    match Command::new("op")
-        .args(["vault", "list", "--format=json"])
+impl fmt::Display for OPVault {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.name)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OPItem {
+    pub id: String,
+    pub title: String,
+}
+
+impl fmt::Display for OPItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.title)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OPSection {
+    pub id: String,
+    pub label: Option<String>,
+}
+
+impl fmt::Display for OPSection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.label.clone() {
+            Some(label) => {
+                write!(f, "{}", label)
+            }
+            None => {
+                write!(f, "No label, id: {}", &self.id)
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OPField {
+    pub id: String,
+    pub label: Option<String>,
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub purpose: Option<String>,
+    pub reference: String,
+    pub section: Option<OPSection>,
+    pub value: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OPItemDetails {
+    pub id: String,
+    pub title: String,
+    pub version: Option<u16>,
+    pub vault: OPVault,
+    pub category: String,
+    pub last_edited_by: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub sections: Option<Vec<OPSection>>,
+    pub fields: Vec<OPField>,
+}
+
+pub fn op_read(reference_string: String) -> String {
+    let output = Command::new("op")
+        .args(["read", &reference_string, "--format=json"])
         .output()
-    {
-        Ok(output) => {
-            let output_string =
-                String::from_utf8(output.stdout).expect("Error reading op vault list");
+        .expect("Could not run 1password CLI. Please make sure it is installed.");
 
-            let vaults: Vec<OPVault> = serde_json::from_str(&output_string).unwrap();
+    let output_string = String::from_utf8(output.stdout).expect("Error reading op field");
 
-            vaults
-        }
-        Err(_) => {
-            println!("Could not run 1password CLI. Please make sure it is installed.");
+    strip_trailing_newline(output_string)
+}
 
-            process::exit(1);
-        }
+pub fn op_edit(item_id: &str, edit_string: String) -> ExitStatus {
+    Command::new("op")
+        .args(["item", "edit", item_id, &edit_string])
+        .output()
+        .expect("Could not run 1password CLI. Please make sure it is installed.")
+        .status
+}
+
+fn op_parse_list<T: de::DeserializeOwned>(command: &mut Command) -> Vec<T> {
+    let output = command
+        .output()
+        .expect("Could not run 1password CLI. Please make sure it is installed.");
+    let output_string = String::from_utf8(output.stdout).expect("Error reading op vault list");
+
+    let list_items: Vec<T> = serde_json::from_str(&output_string).unwrap();
+
+    list_items
+}
+
+pub fn op_get_vaults() -> Vec<OPVault> {
+    let vaults: Vec<OPVault> =
+        op_parse_list(Command::new("op").args(["vault", "list", "--format=json"]));
+
+    vaults
+}
+
+pub fn op_get_items(vault: &OPVault) -> Vec<OPItem> {
+    let mut vault_parameter = String::from("--vault=");
+    vault_parameter.push_str(&vault.name);
+
+    let items: Vec<OPItem> =
+        op_parse_list(Command::new("op").args(["item", "list", &vault_parameter, "--format=json"]));
+
+    items
+}
+
+pub fn op_get_item(id: &str) -> OPItemDetails {
+    let output = Command::new("op")
+        .args(["item", "get", id, "--format=json"])
+        .output()
+        .expect("Could not get item!");
+
+    let output_string = String::from_utf8(output.stdout).expect("Error reading item");
+
+    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
+
+    item_details
+}
+
+pub fn op_create_item(vault: &str, title: &str) -> OPItemDetails {
+    let output = Command::new("op")
+        .args([
+            "item",
+            "create",
+            &format!("--title={}", title),
+            &format!("--vault={}", vault),
+            "--category=Secure Note",
+            "--format=json",
+        ])
+        .output()
+        .expect("Could not get item!");
+
+    let output_string = String::from_utf8(output.stdout).expect("Error reading item");
+
+    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
+
+    item_details
+}
+
+pub fn op_get_sections(item: &OPItem) -> Vec<OPSection> {
+    let output = Command::new("op")
+        .args(["item", "get", &item.id, "--format=json"])
+        .output()
+        .expect("Could not run 1password CLI. Please make sure it is installed.");
+
+    let output_string = String::from_utf8(output.stdout).expect("Error reading op vault list");
+
+    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
+
+    match item_details.sections {
+        Some(sections) => sections.iter().map(|section| section.clone()).collect(),
+        None => Vec::new(),
     }
 }
 
