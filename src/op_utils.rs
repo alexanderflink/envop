@@ -1,9 +1,8 @@
-use crate::utils::strip_trailing_newline;
 use core::fmt;
 use serde::{de, Deserialize, Serialize};
-use serde_json::{Result, Value};
+use serde_json;
 use std::process;
-use std::process::{Command, ExitStatus, Output, Stdio};
+use std::process::{Command, ExitStatus};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OPVault {
@@ -74,20 +73,15 @@ pub struct OPItemDetails {
     pub fields: Vec<OPField>,
 }
 
-pub fn op_read(reference_string: String) -> String {
-    let output = Command::new("op")
-        .args(["read", &reference_string, "--format=json"])
-        .output()
-        .expect("Could not run 1password CLI. Please make sure it is installed.");
+pub fn op_edit(item_id: &str, edits: Vec<String>) -> ExitStatus {
+    let mut args = vec!["item", "edit", item_id];
 
-    let output_string = String::from_utf8(output.stdout).expect("Error reading op field");
+    let edits: Vec<&str> = edits.iter().map(|s| s.as_str()).collect();
 
-    strip_trailing_newline(output_string)
-}
+    args.extend(edits);
 
-pub fn op_edit(item_id: &str, edit_string: String) -> ExitStatus {
     Command::new("op")
-        .args(["item", "edit", item_id, &edit_string])
+        .args(args)
         .output()
         .expect("Could not run 1password CLI. Please make sure it is installed.")
         .status
@@ -152,22 +146,6 @@ pub fn op_create_item(vault: &str, title: &str) -> OPItemDetails {
     let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
 
     item_details
-}
-
-pub fn op_get_sections(item: &OPItem) -> Vec<OPSection> {
-    let output = Command::new("op")
-        .args(["item", "get", &item.id, "--format=json"])
-        .output()
-        .expect("Could not run 1password CLI. Please make sure it is installed.");
-
-    let output_string = String::from_utf8(output.stdout).expect("Error reading op vault list");
-
-    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
-
-    match item_details.sections {
-        Some(sections) => sections.iter().map(|section| section.clone()).collect(),
-        None => Vec::new(),
-    }
 }
 
 pub fn op_sign_in() -> bool {

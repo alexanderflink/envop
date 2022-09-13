@@ -1,15 +1,13 @@
 mod op_utils;
 mod utils;
-use inquire;
 use op_utils::{
-    op_create_item, op_edit, op_get_item, op_get_items, op_get_sections, op_get_vaults, op_read,
-    op_sign_in, op_whoami, OPField, OPItem, OPSection,
+    op_create_item, op_edit, op_get_item, op_get_items, op_get_vaults, op_sign_in, op_whoami,
+    OPField, OPItem, OPSection,
 };
-use std::fs;
-use std::process;
+
 use utils::{
-    ask_create_item, ask_proceed, ask_select_item, compare_env_vars, get_argument_or_default,
-    parse_env_file, read_env_file, write_to_file, EnvVariable, EnvVariables,
+    ask_create_item, ask_proceed, ask_select_item, ask_select_items, get_argument_or_default,
+    parse_env_file, read_env_file, write_to_file, EnvVariable,
 };
 
 fn main() {
@@ -23,8 +21,9 @@ fn main() {
         op_sign_in();
     }
 
-    let env_file_contents = read_env_file(&env_file_path);
-    let provision_file_contents = read_env_file(&provision_file_path);
+    let env_file_contents = read_env_file(&env_file_path)
+        .expect(format!("Failed to read environment file at {}", &env_file_path).as_str());
+    let provision_file_contents = read_env_file(&provision_file_path).unwrap_or(String::new());
 
     let env_vars = parse_env_file(&env_file_contents);
     let provision_vars = parse_env_file(&provision_file_contents);
@@ -36,11 +35,11 @@ fn main() {
     let mut items = op_get_items(&selected_vault);
 
     items.push(OPItem {
-        title: String::from("Create new"),
+        title: String::from("(Create new)"),
         id: String::from("create-new"),
     });
 
-    let selected_item = ask_select_item("Select file: ", items);
+    let selected_item = ask_select_item("Select item, or create new: ", items);
 
     let item_details = match selected_item.id.as_str() {
         "create-new" => {
@@ -54,13 +53,16 @@ fn main() {
     let mut item_sections = item_details.sections.unwrap_or(Vec::new());
 
     item_sections.push(OPSection {
-        label: Some(String::from("Create new")),
+        label: Some(String::from("(Create new)")),
         id: String::from("create-new"),
     });
 
     let item_fields = item_details.fields;
 
-    let mut selected_section = ask_select_item("Select environment (section): ", item_sections);
+    let mut selected_section = ask_select_item(
+        "Select environment (e.g staging / production), or create new: ",
+        item_sections,
+    );
 
     if selected_section.id == "create-new" {
         let new_section_label = ask_create_item("Enter a name: ");
@@ -95,46 +97,44 @@ fn main() {
         })
         .collect();
 
-    println!(
-        "Found {} unsynced variables: {:?}",
-        unsynced_env_vars.len(),
-        unsynced_env_vars
-    );
-
-    let mut updated_env_vars: Vec<&EnvVariable> = Vec::new();
-
-    unsynced_env_vars.iter().for_each(|env| {
-        if !ask_proceed(format!("Do you want to sync {} ?", env.key), true) {
-            println!("Skipping {}", env.key);
-
-            return;
+    let env_vars_to_sync = match ask_select_items(
+        "Which variables do you want to sync? (right arrow to select all): ",
+        unsynced_env_vars,
+    ) {
+        Ok(env_vars) => env_vars,
+        Err(_) => {
+            println!("All variables are up-to-date!");
+            Vec::new()
         }
+    };
 
-        if op_edit(
-            item_details.id.as_str(),
-            format!("{}.{}[text]={}", selected_section.id, env.key, env.value),
-        )
-        .success()
-        {
-            println!("Synced {} successfully!", env.key);
-            updated_env_vars.push(env);
+    if env_vars_to_sync.len() > 0 {
+        let field_edit_command: Vec<String> = env_vars_to_sync
+            .iter()
+            .map(|env| format!("{}.{}[text]={}", selected_section.id, env.key, env.value))
+            .collect();
+
+        if op_edit(item_details.id.as_str(), field_edit_command).success() {
+            println!("Synced variables successfully!");
         } else {
-            println!("Failed to sync {}!", env.key);
+            println!("Failed to sync variables!");
         }
-    });
+    }
 
     /*
         PROVISION FILE
     */
 
     if ask_proceed(
-        String::from(
-            "Do you want to sync variables from vault to provision file (.env.provision)?",
-        ),
+        format!(
+            "Do you want to sync variables from vault to provision file ({})?",
+            provision_file_path
+        )
+        .as_str(),
         false,
     ) {
         let use_env_for_section = ask_proceed(
-            String::from("Use environment variable for section ($OP_ENV)?"),
+            "Use environment variable $OP_ENV for environment (e.g staging / production)?",
             true,
         );
 
@@ -175,7 +175,8 @@ fn main() {
                             item_details.title,
                             selected_section_label,
                             field_label
-                        ),
+                        )
+                        .as_str(),
                     )
                     .expect("Failed to write to provision file.");
                 }
@@ -189,7 +190,8 @@ fn main() {
                             item_details.title,
                             selected_section.id,
                             field_label
-                        ),
+                        )
+                        .as_str(),
                     )
                     .expect("Failed to write to provision file.");
                 }
