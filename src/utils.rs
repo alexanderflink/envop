@@ -15,7 +15,7 @@ pub struct EnvVariable {
 
 impl fmt::Display for EnvVariable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} -> {}", &self.key, &self.value)
+        write!(f, "{}", &self.key)
     }
 }
 
