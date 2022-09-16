@@ -1,11 +1,14 @@
 mod op_utils;
 mod utils;
 use argh::FromArgs;
+use glob::glob;
 use op_utils::{
     op_create_item, op_edit, op_get_item, op_get_items, op_get_vaults, op_sign_in, op_whoami,
-    OPField, OPItem, OPSection,
+    OPField, OPItem, OPItemDetails, OPSection,
 };
 use std::env;
+use std::fs;
+use std::path;
 use std::process;
 use utils::{
     ask_create_item, ask_proceed, ask_select_item, ask_select_items, get_argument_or_default,
@@ -78,7 +81,8 @@ fn sync_up(options: SyncUpOptions) {
 
     let vaults = op_get_vaults();
 
-    let selected_vault = ask_select_item("Select vault: ", vaults);
+    let selected_vault =
+        ask_select_item("Select vault: ", vaults).expect("Failed to select vault.");
 
     let mut items = op_get_items(&selected_vault);
     items.push(OPItem {
@@ -86,53 +90,68 @@ fn sync_up(options: SyncUpOptions) {
         id: String::from("create-new"),
     });
 
-    let selected_item = ask_select_item("Select item, or create new: ", items);
-
-    let item_details = match selected_item.id.as_str() {
-        "create-new" => {
+    let item_details = match ask_select_item("Select item, or create new: ", items)
+        .expect("Failed to select item.")
+    {
+        OPItem { title, id } if id == String::from("create-new") => {
             let new_item_title = ask_create_item("Enter a name: ");
 
             op_create_item(&selected_vault.name, new_item_title.as_str())
         }
-        _ => op_get_item(&selected_item.id),
+        item => op_get_item(item.id.as_str()),
     };
 
-    let mut item_sections = item_details.sections.unwrap_or(Vec::new());
+    let mut item_sections: Vec<OPSection> = item_details
+        .sections
+        .unwrap_or(Vec::new())
+        .iter()
+        .filter(|section| section.label.is_some())
+        .map(|section| section.clone())
+        .collect();
 
     item_sections.push(OPSection {
         label: Some(String::from("(Create new)")),
         id: String::from("create-new"),
     });
 
+    item_sections.push(OPSection {
+        label: Some(String::from("(None)")),
+        id: String::from("none"),
+    });
+
     let item_fields = item_details.fields;
 
-    let mut selected_section = ask_select_item(
+    let selected_section = match ask_select_item(
         "Select environment (e.g staging / production), or create new: ",
         item_sections,
-    );
+    )
+    .expect("Failed to select section.")
+    {
+        OPSection { label: _, id } if id == String::from("create-new") => {
+            let new_section_label = ask_create_item("Enter a name: ");
 
-    if selected_section.id == "create-new" {
-        let new_section_label = ask_create_item("Enter a name: ");
-
-        selected_section = OPSection {
-            label: Some(new_section_label.clone()),
-            id: new_section_label.clone(),
-        };
-    }
+            Some(OPSection {
+                label: Some(new_section_label.clone()),
+                id: new_section_label.clone(),
+            })
+        }
+        OPSection { label: _, id } if id == String::from("none") => None,
+        section => Some(section),
+    };
 
     let unsynced_env_vars: Vec<&EnvVariable> = env_vars
         .iter()
         .filter(|env| {
             item_fields
                 .iter()
-                .filter(|field| {
-                    let field_section_label = match field.section.clone() {
-                        Some(section) => section.label.unwrap_or(String::from("")),
-                        None => String::from(""),
-                    };
-
-                    field_section_label
-                        == selected_section.label.clone().unwrap_or(String::from(""))
+                .filter(|field| match (&field.section, &selected_section) {
+                    (Some(field_section), Some(selected_section))
+                        if field_section.label == selected_section.label =>
+                    {
+                        true
+                    }
+                    (Some(OPSection { id: _, label: None }), None) => true,
+                    (_, _) => false,
                 })
                 .all(|field| {
                     let field_label = field.label.clone().unwrap_or(String::from(""));
@@ -157,21 +176,24 @@ fn sync_up(options: SyncUpOptions) {
         format!("{}{} -> {}\n", acc, env.key, env.value)
     });
 
-    if !ask_proceed(
-        format!(
-            "Are you sure you want to sync these variables? \n{}",
-            confirmation_string
+    if env_vars_to_sync.len() > 0
+        && ask_proceed(
+            format!(
+                "Are you sure you want to sync these variables? \n{}",
+                confirmation_string
+            )
+            .as_str(),
+            false,
         )
-        .as_str(),
-        false,
-    ) {
-        return;
-    }
-
-    if env_vars_to_sync.len() > 0 {
+    {
         let field_edit_command: Vec<String> = env_vars_to_sync
             .iter()
-            .map(|env| format!("{}.{}[text]={}", selected_section.id, env.key, env.value))
+            .map(|env| match selected_section.clone() {
+                Some(selected_section) => {
+                    format!("{}.{}[text]={}", selected_section.id, env.key, env.value)
+                }
+                None => format!("{}[text]={}", env.key, env.value),
+            })
             .collect();
 
         if op_edit(item_details.id.as_str(), field_edit_command).success() {
@@ -180,16 +202,51 @@ fn sync_up(options: SyncUpOptions) {
             println!("Failed to sync variables!");
         }
     }
+
+    let provision_file = match selected_section.clone() {
+        Some(OPSection {
+            id: _,
+            label: Some(label),
+        }) => format!(".env.provision.{}", label),
+        _ => String::from(".env.provision"),
+    };
+
+    // write to provision file
+    if ask_proceed(
+        format!("Do you want to write to {}?", &provision_file).as_str(),
+        true,
+    ) {
+        // check if provision file exists, if not, create it
+        if path::Path::new(&provision_file).is_file() {
+            let provision_file_contents =
+                fs::read_to_string(&provision_file).expect("Failed to read provision file.");
+
+            let provision_vars = parse_env_file(&provision_file_contents);
+        } else {
+            println!("Didn't find provision file, creating a new one!");
+        }
+    }
 }
 
 fn sync_down(options: SyncDownOptions) {
-    let provision_file_path = get_argument_or_default(1, ".env.provision");
-    let provision_file_contents = read_env_file(&provision_file_path).unwrap_or(String::new());
-    let provision_vars = parse_env_file(&provision_file_contents);
+    // find all provision files
+    let provision_files: Vec<glob::GlobResult> = glob("./.env.provision*")
+        .expect("Failed to read glob pattern")
+        .collect();
+
+    println!("Found {} provision files", provision_files.len());
+
+    // ask if user wants to write to provision files for each section
+
+    // let user choose which provision file they want to use to sync to .env
+
     /*
         PROVISION FILE
     */
 
+    // let provision_file_path = get_argument_or_default(1, ".env.provision");
+    // let provision_file_contents = read_env_file(&provision_file_path).unwrap_or(String::new());
+    // let provision_vars = parse_env_file(&provision_file_contents);
     // ask if user wants to sync to provision file
     // ask user which environments they want to write a provision file for
     // write fields in vault to corresponding provision file (section maps to .env.provision.[SECTION])

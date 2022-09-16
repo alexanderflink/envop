@@ -39,10 +39,11 @@ pub fn read_env_file(file_path: &str) -> io::Result<String> {
     fs::read_to_string(file_path)
 }
 
-pub fn ask_select_item<T: fmt::Display>(message: &str, items: Vec<T>) -> T {
-    inquire::Select::new(message, items)
-        .prompt()
-        .expect("Nothing selected")
+pub fn ask_select_item<T: fmt::Display>(
+    message: &str,
+    items: Vec<T>,
+) -> Result<T, inquire::InquireError> {
+    inquire::Select::new(message, items).prompt()
 }
 
 pub fn ask_select_items<T: fmt::Display>(
@@ -66,25 +67,52 @@ pub fn ask_proceed(message: &str, default: bool) -> bool {
 pub fn parse_env_file(file_contents: &str) -> Vec<EnvVariable> {
     let split: Split<&str> = file_contents.split("\n");
 
-    let mut env_variables: Vec<EnvVariable> = Vec::new();
     let mut line_number = 0;
 
-    split.for_each(|line| {
-        if line.contains("=") {
-            let mut env_iterator: Split<&str> = line.split("=");
+    let env_variables: Vec<EnvVariable> = split
+        .map(|line| {
+            let env;
 
-            let key = env_iterator.next().unwrap();
-            let value = env_iterator.next().unwrap();
+            if line.contains("=") {
+                let mut env_iterator: Split<&str> = line.split("=");
 
-            env_variables.push(EnvVariable {
-                key: String::from(key),
-                value: String::from(value),
-                line: line_number,
-            });
-        }
+                let key = env_iterator.next()?;
+                let value = env_iterator.next()?;
 
-        line_number += 1;
-    });
+                env = Some(EnvVariable {
+                    key: String::from(key),
+                    value: String::from(value),
+                    line: line_number,
+                });
+            } else {
+                env = None;
+            }
+
+            line_number += 1;
+
+            env
+        })
+        .filter(|env| env.is_some())
+        .map(|env| env.unwrap())
+        .collect();
+
+    // split.try_for_each(|line| {
+    //     if line.contains("=") {
+    //         let mut env_iterator: Split<&str> = line.split("=");
+
+    //         let key = env_iterator.next()?;
+    //         let value = env_iterator.next()?;
+
+    //         env_variables.push(EnvVariable {
+    //             key: String::from(key),
+    //             value: String::from(value),
+    //             line: line_number,
+    //         });
+    //     }
+
+    //     line_number += 1;
+    //     Some(())
+    // });
 
     env_variables
 }
