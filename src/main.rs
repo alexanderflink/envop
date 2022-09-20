@@ -3,16 +3,18 @@ mod utils;
 use argh::FromArgs;
 use glob::glob;
 use op_utils::{
-    op_create_item, op_edit, op_get_item, op_get_items, op_get_vaults, op_sign_in, op_whoami,
+    op_create_item, op_edit, op_field_in_section, op_field_to_env_var,
+    op_field_to_env_var_reference, op_get_item, op_get_items, op_get_vaults, op_sign_in, op_whoami,
     OPField, OPItem, OPItemDetails, OPSection,
 };
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path;
 use std::process;
 use utils::{
-    ask_create_item, ask_proceed, ask_select_item, ask_select_items, get_argument_or_default,
-    parse_env_file, read_env_file, write_to_file, EnvVariable,
+    ask_create_item, ask_proceed, ask_select_item, ask_select_items, env_vars_from_op_fields,
+    get_argument_or_default, parse_env_file, read_env_file, write_to_file, EnvVariable,
 };
 
 #[derive(FromArgs)]
@@ -93,7 +95,7 @@ fn sync_up(options: SyncUpOptions) {
     let item_details = match ask_select_item("Select item, or create new: ", items)
         .expect("Failed to select item.")
     {
-        OPItem { title, id } if id == String::from("create-new") => {
+        OPItem { id, .. } if id == String::from("create-new") => {
             let new_item_title = ask_create_item("Enter a name: ");
 
             op_create_item(&selected_vault.name, new_item_title.as_str())
@@ -119,15 +121,13 @@ fn sync_up(options: SyncUpOptions) {
         id: String::from("none"),
     });
 
-    let item_fields = item_details.fields;
-
     let selected_section = match ask_select_item(
         "Select environment (e.g staging / production), or create new: ",
         item_sections,
     )
     .expect("Failed to select section.")
     {
-        OPSection { label: _, id } if id == String::from("create-new") => {
+        OPSection { id, .. } if id == String::from("create-new") => {
             let new_section_label = ask_create_item("Enter a name: ");
 
             Some(OPSection {
@@ -135,31 +135,25 @@ fn sync_up(options: SyncUpOptions) {
                 id: new_section_label.clone(),
             })
         }
-        OPSection { label: _, id } if id == String::from("none") => None,
+        OPSection { id, .. } if id == String::from("none") => None,
         section => Some(section),
     };
+
+    let item_vars: Vec<EnvVariable> = item_details
+        .fields
+        .iter()
+        .filter(|field| op_field_in_section(field, &selected_section))
+        .filter_map(op_field_to_env_var)
+        .collect();
 
     let unsynced_env_vars: Vec<&EnvVariable> = env_vars
         .iter()
         .filter(|env| {
-            item_fields
-                .iter()
-                .filter(|field| match (&field.section, &selected_section) {
-                    (Some(field_section), Some(selected_section))
-                        if field_section.label == selected_section.label =>
-                    {
-                        true
-                    }
-                    (Some(OPSection { id: _, label: None }), None) => true,
-                    (_, _) => false,
-                })
-                .all(|field| {
-                    let field_label = field.label.clone().unwrap_or(String::from(""));
-                    let field_value = field.value.clone().unwrap_or(String::from(""));
-
-                    // check if variable is not synced
-                    (field_label == env.key && field_value != env.value) || field_label != env.key
-                })
+            item_vars.iter().all(|field_env| {
+                // check if variable is not synced
+                (field_env.key == env.key && field_env.value != env.value)
+                    || field_env.key != env.key
+            })
         })
         .collect();
 
@@ -203,28 +197,57 @@ fn sync_up(options: SyncUpOptions) {
         }
     }
 
-    let provision_file = match selected_section.clone() {
+    let provision_file_path = match selected_section.clone() {
         Some(OPSection {
-            id: _,
-            label: Some(label),
+            label: Some(label), ..
         }) => format!(".env.provision.{}", label),
         _ => String::from(".env.provision"),
     };
 
     // write to provision file
     if ask_proceed(
-        format!("Do you want to write to {}?", &provision_file).as_str(),
+        format!("Do you want to write to {}?", &provision_file_path).as_str(),
         true,
     ) {
+        let mut item_provision_vars: Vec<EnvVariable> = item_details
+            .fields
+            .iter()
+            .filter(|field| op_field_in_section(field, &selected_section))
+            .filter_map(op_field_to_env_var_reference)
+            .collect();
+
         // check if provision file exists, if not, create it
-        if path::Path::new(&provision_file).is_file() {
+        if path::Path::new(&provision_file_path).is_file() {
             let provision_file_contents =
-                fs::read_to_string(&provision_file).expect("Failed to read provision file.");
+                fs::read_to_string(&provision_file_path).expect("Failed to read provision file.");
 
             let provision_vars = parse_env_file(&provision_file_contents);
+
+            item_provision_vars = item_provision_vars
+                .into_iter()
+                .filter(|item_var| {
+                    provision_vars
+                        .iter()
+                        .all(|provision_var| provision_var.key != item_var.key)
+                })
+                .collect();
         } else {
             println!("Didn't find provision file, creating a new one!");
+            fs::File::create(&provision_file_path).expect("Failed to create provision file.");
         }
+
+        let string_to_write = item_provision_vars
+            .iter()
+            .fold(String::from(""), |acc, env| {
+                format!("{}{}={}\n", acc, env.key, env.value)
+            });
+
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&provision_file_path)
+            .expect("Failed to open provision file")
+            .write_all(string_to_write.as_bytes())
+            .expect("Failed to write to provision file.");
     }
 }
 

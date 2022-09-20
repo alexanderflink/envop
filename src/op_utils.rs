@@ -1,3 +1,4 @@
+use crate::utils::EnvVariable;
 use core::fmt;
 use serde::{de, Deserialize, Serialize};
 use serde_json;
@@ -175,5 +176,39 @@ pub fn op_whoami() -> bool {
 
             process::exit(1);
         }
+    }
+}
+
+pub fn op_field_in_section(field: &OPField, section: &Option<OPSection>) -> bool {
+    match (&field.section, section) {
+        (Some(field_section), Some(section)) if field_section.label == section.label => true,
+        (Some(OPSection { label: None, .. }) | None, None) => true,
+        (_, _) => false,
+    }
+}
+
+pub fn op_field_to_env_var_reference(field: &OPField) -> Option<EnvVariable> {
+    match field {
+        OPField {
+            label: Some(label), ..
+        } => Some(EnvVariable {
+            key: label.to_string(),
+            value: String::from(&field.reference),
+        }),
+        _ => None,
+    }
+}
+
+pub fn op_field_to_env_var(field: &OPField) -> Option<EnvVariable> {
+    match field {
+        OPField {
+            label: Some(label),
+            value: Some(value),
+            ..
+        } => Some(EnvVariable {
+            key: label.to_string(),
+            value: value.to_string(),
+        }),
+        _ => None,
     }
 }

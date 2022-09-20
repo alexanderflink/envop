@@ -1,3 +1,4 @@
+use crate::op_utils::OPField;
 use core::fmt;
 use std::env;
 use std::fs;
@@ -10,7 +11,6 @@ use std::str::Split;
 pub struct EnvVariable {
     pub key: String,
     pub value: String,
-    pub line: i32,
 }
 
 impl fmt::Display for EnvVariable {
@@ -67,10 +67,8 @@ pub fn ask_proceed(message: &str, default: bool) -> bool {
 pub fn parse_env_file(file_contents: &str) -> Vec<EnvVariable> {
     let split: Split<&str> = file_contents.split("\n");
 
-    let mut line_number = 0;
-
     let env_variables: Vec<EnvVariable> = split
-        .map(|line| {
+        .filter_map(|line| {
             let env;
 
             if line.contains("=") {
@@ -82,39 +80,31 @@ pub fn parse_env_file(file_contents: &str) -> Vec<EnvVariable> {
                 env = Some(EnvVariable {
                     key: String::from(key),
                     value: String::from(value),
-                    line: line_number,
                 });
             } else {
                 env = None;
             }
 
-            line_number += 1;
-
             env
         })
-        .filter(|env| env.is_some())
-        .map(|env| env.unwrap())
         .collect();
 
-    // split.try_for_each(|line| {
-    //     if line.contains("=") {
-    //         let mut env_iterator: Split<&str> = line.split("=");
-
-    //         let key = env_iterator.next()?;
-    //         let value = env_iterator.next()?;
-
-    //         env_variables.push(EnvVariable {
-    //             key: String::from(key),
-    //             value: String::from(value),
-    //             line: line_number,
-    //         });
-    //     }
-
-    //     line_number += 1;
-    //     Some(())
-    // });
-
     env_variables
+}
+
+pub fn env_vars_from_op_fields(fields: &Vec<OPField>) -> Vec<EnvVariable> {
+    fields
+        .iter()
+        .filter_map(|field| match field {
+            OPField {
+                label: Some(label), ..
+            } => Some(EnvVariable {
+                key: String::from(label),
+                value: String::from("op://"),
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 pub fn get_argument_or_default(index: usize, default: &str) -> String {
