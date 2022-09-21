@@ -1,9 +1,11 @@
-use crate::utils::EnvVariable;
+use crate::EnvVariable;
 use core::fmt;
 use serde::{de, Deserialize, Serialize};
 use serde_json;
+use std::io;
 use std::process;
-use std::process::{Command, ExitStatus};
+use std::process::Command;
+use std::string::FromUtf8Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OPVault {
@@ -74,18 +76,45 @@ pub struct OPItemDetails {
     pub fields: Vec<OPField>,
 }
 
-pub fn op_edit(item_id: &str, edits: Vec<String>) -> ExitStatus {
-    let mut args = vec!["item", "edit", item_id];
+#[derive(Debug)]
+pub enum EditError {
+    IOError(io::Error),
+    SerializeError(serde_json::Error),
+    FromUtf8Error(FromUtf8Error),
+}
+
+impl From<io::Error> for EditError {
+    fn from(e: io::Error) -> Self {
+        Self::IOError(e)
+    }
+}
+
+impl From<FromUtf8Error> for EditError {
+    fn from(e: FromUtf8Error) -> Self {
+        Self::FromUtf8Error(e)
+    }
+}
+
+impl From<serde_json::Error> for EditError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::SerializeError(e)
+    }
+}
+
+pub fn op_edit(item_id: &str, edits: Vec<String>) -> Result<OPItemDetails, EditError> {
+    let mut args = vec!["item", "edit", item_id, "--format=json"];
 
     let edits: Vec<&str> = edits.iter().map(|s| s.as_str()).collect();
 
     args.extend(edits);
 
-    Command::new("op")
-        .args(args)
-        .output()
-        .expect("Could not run 1password CLI. Please make sure it is installed.")
-        .status
+    let output = Command::new("op").args(args).output()?;
+
+    let output_string = String::from_utf8(output.stdout)?;
+
+    let item_details: OPItemDetails = serde_json::from_str(&output_string)?;
+
+    Ok(item_details)
 }
 
 fn op_parse_list<T: de::DeserializeOwned>(command: &mut Command) -> Vec<T> {
