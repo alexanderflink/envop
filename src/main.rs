@@ -23,7 +23,8 @@ pub struct EnvVariable {
 }
 
 #[derive(FromArgs)]
-/// Sync environment variables using 1password.
+/// Sync environment variables using 1password. Requires the 1password CLI to be installed: https://1password.com/downloads/command-line/. This CLI will not delete any items from 1password, it will only add and update their values. Deletion has to be done manually. Syncing is done using provisioning files which point to a secret in a 1password vault. Different environments such as "staging" and "production" are best handled using sections in 1password.
+
 struct Args {
     #[argh(subcommand)]
     subcommand: SubCommands,
