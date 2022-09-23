@@ -4,8 +4,8 @@ use argh::FromArgs;
 use glob::glob;
 use op_utils::{
     op_create_item, op_edit, op_field_in_section, op_field_to_env_var,
-    op_field_to_env_var_reference, op_get_item, op_get_items, op_get_vaults, op_sign_in, op_whoami,
-    OPItem, OPSection,
+    op_field_to_env_var_reference, op_get_item, op_get_items, op_get_vaults, op_inject, op_sign_in,
+    op_whoami, OPItem, OPSection,
 };
 use std::fs;
 use std::io::Write;
@@ -49,9 +49,9 @@ struct SyncUpOptions {
 /// sync variables from 1password vault to .env file
 #[argh(subcommand, name = "down")]
 struct SyncDownOptions {
-    #[argh(option, default = "String::from(\".env.provision\")")]
-    /// path to .env.provision file
-    provision: String,
+    #[argh(option, default = "String::from(\".env\")")]
+    /// path to .env file
+    env: String,
 }
 
 fn main() {
@@ -92,11 +92,14 @@ fn sync_up(options: SyncUpOptions) {
         ask_select_item("Select vault: ", vaults).expect("Failed to select vault.");
 
     let mut items = op_get_items(&selected_vault).expect("Failed to get items.");
+
+    // add a "Create new" item to the list of items
     items.push(OPItem {
         title: String::from("(Create new)"),
         id: String::from("create-new"),
     });
 
+    // get item details, or create new item if user has chosen that
     let mut item_details = match ask_select_item("Select item, or create new: ", items)
         .expect("Failed to select item.")
     {
@@ -109,14 +112,16 @@ fn sync_up(options: SyncUpOptions) {
         item => op_get_item(item.id.as_str()).expect("Failed to create item."),
     };
 
+    // get item sections with a label (or an empty Vec)
     let mut item_sections: Vec<OPSection> = item_details
         .sections
         .unwrap_or(Vec::new())
         .iter()
+        .cloned()
         .filter(|section| section.label.is_some())
-        .map(|section| section.clone())
         .collect();
 
+    // add "Create new" and "None" sections to the list of sections
     item_sections.push(OPSection {
         label: Some(String::from("(Create new)")),
         id: String::from("create-new"),
@@ -127,6 +132,7 @@ fn sync_up(options: SyncUpOptions) {
         id: String::from("none"),
     });
 
+    // get selected section, or create new one
     let selected_section = match ask_select_item(
         "Select environment (e.g staging / production), or create new: ",
         item_sections,
@@ -145,6 +151,7 @@ fn sync_up(options: SyncUpOptions) {
         section => Some(section),
     };
 
+    // get fields from 1password item and convert to EnvVariables
     let item_vars: Vec<EnvVariable> = item_details
         .fields
         .iter()
@@ -167,7 +174,7 @@ fn sync_up(options: SyncUpOptions) {
         match ask_select_items("Which variables do you want to sync?", unsynced_env_vars) {
             Ok(env_vars) => env_vars,
             Err(_) => {
-                println!("All variables are up-to-date!");
+                println!("No new variables to upload!");
                 Vec::new()
             }
         };
@@ -176,6 +183,7 @@ fn sync_up(options: SyncUpOptions) {
         format!("{}{} -> {}\n", acc, env.key, env.value)
     });
 
+    // update fields in 1password
     if env_vars_to_sync.len() > 0
         && ask_proceed(
             format!(
@@ -215,7 +223,6 @@ fn sync_up(options: SyncUpOptions) {
     };
 
     // write to provision file
-    // TODO: make sure provision file is written to when user creates entirely new section
     if ask_proceed(
         format!("Do you want to write to {}?", &provision_file_path).as_str(),
         true,
@@ -260,100 +267,27 @@ fn sync_up(options: SyncUpOptions) {
 }
 
 fn sync_down(options: SyncDownOptions) {
+    let env_file_path = options.env;
+
     // find all provision files
-    let provision_files: Vec<glob::GlobResult> = glob("./.env.provision*")
+    let provision_files: Vec<String> = glob("./.env.provision*")
         .expect("Failed to read glob pattern")
+        .filter_map(|glob_result| match glob_result {
+            Ok(result) => Some(result.into_os_string().into_string().ok()?),
+            Err(_) => None,
+        })
         .collect();
 
-    println!("Found {} provision files", provision_files.len());
+    let selected_provision_file =
+        ask_select_item("Which provision file do you want to use?", provision_files)
+            .expect("Failed to select provision file.");
 
-    // ask if user wants to write to provision files for each section
-
-    // let user choose which provision file they want to use to sync to .env
-
-    /*
-        PROVISION FILE
-    */
-
-    // let provision_file_path = get_argument_or_default(1, ".env.provision");
-    // let provision_file_contents = read_env_file(&provision_file_path).unwrap_or(String::new());
-    // let provision_vars = parse_env_file(&provision_file_contents);
-    // ask if user wants to sync to provision file
-    // ask user which environments they want to write a provision file for
-    // write fields in vault to corresponding provision file (section maps to .env.provision.[SECTION])
-
-    // if ask_proceed(
-    //     format!(
-    //         "Do you want to sync variables from vault to provision file ({})?",
-    //         provision_file_path
-    //     )
-    //     .as_str(),
-    //     false,
-    // ) {
-    //     let use_env_for_section = ask_proceed(
-    //         "Use environment variable $OP_ENV for environment (e.g staging / production)?",
-    //         true,
-    //     );
-
-    //     let item_details = op_get_item(item_details.id.as_str());
-
-    //     let item_fields = item_details.fields;
-
-    //     let unsynced_fields: Vec<&OPField> = item_fields
-    //         .iter()
-    //         .filter(|field| match field.section.clone() {
-    //             Some(field_section) => {
-    //                 field_section.label == selected_section.label
-    //                     && provision_vars.iter().all(|provision_var| {
-    //                         provision_var.key != field.label.clone().unwrap_or(String::from(""))
-    //                     })
-    //             }
-    //             None => false,
-    //         })
-    //         .collect();
-
-    //     unsynced_fields.iter().for_each(|field| {
-    //         let field_label = field.clone().label.clone();
-
-    //         let selected_section_label = if use_env_for_section {
-    //             Some(String::from("$OP_ENV"))
-    //         } else {
-    //             selected_section.label.clone()
-    //         };
-
-    //         match (field_label, selected_section_label) {
-    //             (Some(field_label), Some(selected_section_label)) => {
-    //                 write_to_file(
-    //                     &provision_file_path,
-    //                     format!(
-    //                         "{}=op://{}/{}/{}/{}\n",
-    //                         field_label,
-    //                         selected_vault.name,
-    //                         item_details.title,
-    //                         selected_section_label,
-    //                         field_label
-    //                     )
-    //                     .as_str(),
-    //                 )
-    //                 .expect("Failed to write to provision file.");
-    //             }
-    //             (Some(field_label), None) => {
-    //                 write_to_file(
-    //                     &provision_file_path,
-    //                     format!(
-    //                         "{}=op://{}/{}/{}/{}\n",
-    //                         field_label,
-    //                         selected_vault.name,
-    //                         item_details.title,
-    //                         selected_section.id,
-    //                         field_label
-    //                     )
-    //                     .as_str(),
-    //                 )
-    //                 .expect("Failed to write to provision file.");
-    //             }
-    //             _ => (),
-    //         }
-    //     });
-    // }
+    match op_inject(&selected_provision_file, &env_file_path) {
+        Ok(_) => {
+            println!("Successfully synced to {} !", &env_file_path);
+        }
+        Err(err) => {
+            println!("Error syncing variables: {}", err);
+        }
+    }
 }

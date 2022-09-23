@@ -4,7 +4,7 @@ use serde::{de, Deserialize, Serialize};
 use serde_json;
 use std::io;
 use std::process;
-use std::process::Command;
+use std::process::{Command, Output};
 use std::string::FromUtf8Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -229,5 +229,28 @@ pub fn op_field_to_env_var(field: &OPField) -> Option<EnvVariable> {
             value: value.to_string(),
         }),
         _ => None,
+    }
+}
+
+pub fn op_inject(env_file_path: &str, provision_file_path: &str) -> io::Result<Output> {
+    match Command::new("op")
+        .args([
+            "inject",
+            format!("--in-file={}", env_file_path).as_str(),
+            format!("--out-file={}", provision_file_path).as_str(),
+            "--force",
+        ])
+        .output()
+    {
+        Ok(output @ Output { status, .. }) if status.success() => Ok(output),
+        Ok(output @ Output { status, .. }) if !status.success() => Err(io::Error::new(
+            io::ErrorKind::Other,
+            String::from_utf8(output.stderr).expect(""),
+        )),
+        Err(err) => Err(err),
+        output => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to inject because of an unknown error: {:?}", output),
+        )),
     }
 }
