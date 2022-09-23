@@ -1,0 +1,29 @@
+{
+  "name": "opdot",
+  "version": "0.1.0",
+  "description": "A CLI for syncing environment variables using 1password",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexanderflink/opdot.git"
+  },
+  "keywords": [
+    "env",
+    "environment",
+    "sync",
+    "1password",
+    "cli"
+  ],
+  "author": "Alexander Flink",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alexanderflink/opdot/issues"
+  },
+  "homepage": "https://github.com/alexanderflink/opdot#readme",
+  "devDependencies": {
+    "binary-install": "^1.0.6"
+  }
+}
