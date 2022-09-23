@@ -86,12 +86,12 @@ fn sync_up(options: SyncUpOptions) {
 
     let env_vars = parse_env_file(&env_file_contents);
 
-    let vaults = op_get_vaults();
+    let vaults = op_get_vaults().expect("Failed to get vaults.");
 
     let selected_vault =
         ask_select_item("Select vault: ", vaults).expect("Failed to select vault.");
 
-    let mut items = op_get_items(&selected_vault);
+    let mut items = op_get_items(&selected_vault).expect("Failed to get items.");
     items.push(OPItem {
         title: String::from("(Create new)"),
         id: String::from("create-new"),
@@ -104,8 +104,9 @@ fn sync_up(options: SyncUpOptions) {
             let new_item_title = ask_create_item("Enter a name: ");
 
             op_create_item(&selected_vault.name, new_item_title.as_str())
+                .expect("Failed to create item.")
         }
-        item => op_get_item(item.id.as_str()),
+        item => op_get_item(item.id.as_str()).expect("Failed to create item."),
     };
 
     let mut item_sections: Vec<OPSection> = item_details

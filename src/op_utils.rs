@@ -77,31 +77,31 @@ pub struct OPItemDetails {
 }
 
 #[derive(Debug)]
-pub enum EditError {
+pub enum ParseOPError {
     IOError(io::Error),
     SerializeError(serde_json::Error),
     FromUtf8Error(FromUtf8Error),
 }
 
-impl From<io::Error> for EditError {
+impl From<io::Error> for ParseOPError {
     fn from(e: io::Error) -> Self {
         Self::IOError(e)
     }
 }
 
-impl From<FromUtf8Error> for EditError {
+impl From<FromUtf8Error> for ParseOPError {
     fn from(e: FromUtf8Error) -> Self {
         Self::FromUtf8Error(e)
     }
 }
 
-impl From<serde_json::Error> for EditError {
+impl From<serde_json::Error> for ParseOPError {
     fn from(e: serde_json::Error) -> Self {
         Self::SerializeError(e)
     }
 }
 
-pub fn op_edit(item_id: &str, edits: Vec<String>) -> Result<OPItemDetails, EditError> {
+pub fn op_edit(item_id: &str, edits: Vec<String>) -> Result<OPItemDetails, ParseOPError> {
     let mut args = vec!["item", "edit", item_id, "--format=json"];
 
     let edits: Vec<&str> = edits.iter().map(|s| s.as_str()).collect();
@@ -117,48 +117,39 @@ pub fn op_edit(item_id: &str, edits: Vec<String>) -> Result<OPItemDetails, EditE
     Ok(item_details)
 }
 
-fn op_parse_list<T: de::DeserializeOwned>(command: &mut Command) -> Vec<T> {
-    let output = command
-        .output()
-        .expect("Could not run 1password CLI. Please make sure it is installed.");
-    let output_string = String::from_utf8(output.stdout).expect("Error reading op vault list");
+fn op_parse_list<T: de::DeserializeOwned>(command: &mut Command) -> Result<Vec<T>, ParseOPError> {
+    let output = command.output()?;
+    let output_string = String::from_utf8(output.stdout)?;
 
-    let list_items: Vec<T> = serde_json::from_str(&output_string).unwrap();
+    let list_items: Vec<T> = serde_json::from_str(&output_string)?;
 
-    list_items
+    Ok(list_items)
 }
 
-pub fn op_get_vaults() -> Vec<OPVault> {
-    let vaults: Vec<OPVault> =
-        op_parse_list(Command::new("op").args(["vault", "list", "--format=json"]));
-
-    vaults
+pub fn op_get_vaults() -> Result<Vec<OPVault>, ParseOPError> {
+    op_parse_list(Command::new("op").args(["vault", "list", "--format=json"]))
 }
 
-pub fn op_get_items(vault: &OPVault) -> Vec<OPItem> {
+pub fn op_get_items(vault: &OPVault) -> Result<Vec<OPItem>, ParseOPError> {
     let mut vault_parameter = String::from("--vault=");
     vault_parameter.push_str(&vault.name);
 
-    let items: Vec<OPItem> =
-        op_parse_list(Command::new("op").args(["item", "list", &vault_parameter, "--format=json"]));
-
-    items
+    op_parse_list(Command::new("op").args(["item", "list", &vault_parameter, "--format=json"]))
 }
 
-pub fn op_get_item(id: &str) -> OPItemDetails {
+pub fn op_get_item(id: &str) -> Result<OPItemDetails, ParseOPError> {
     let output = Command::new("op")
         .args(["item", "get", id, "--format=json"])
-        .output()
-        .expect("Could not get item!");
+        .output()?;
 
-    let output_string = String::from_utf8(output.stdout).expect("Error reading item");
+    let output_string = String::from_utf8(output.stdout)?;
 
-    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
+    let item_details: OPItemDetails = serde_json::from_str(&output_string)?;
 
-    item_details
+    Ok(item_details)
 }
 
-pub fn op_create_item(vault: &str, title: &str) -> OPItemDetails {
+pub fn op_create_item(vault: &str, title: &str) -> Result<OPItemDetails, ParseOPError> {
     let output = Command::new("op")
         .args([
             "item",
@@ -168,14 +159,13 @@ pub fn op_create_item(vault: &str, title: &str) -> OPItemDetails {
             "--category=Secure Note",
             "--format=json",
         ])
-        .output()
-        .expect("Could not get item!");
+        .output()?;
 
-    let output_string = String::from_utf8(output.stdout).expect("Error reading item");
+    let output_string = String::from_utf8(output.stdout)?;
 
-    let item_details: OPItemDetails = serde_json::from_str(&output_string).unwrap();
+    let item_details: OPItemDetails = serde_json::from_str(&output_string)?;
 
-    item_details
+    Ok(item_details)
 }
 
 pub fn op_sign_in() -> bool {
