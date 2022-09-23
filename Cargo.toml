@@ -1,7 +1,13 @@
 [package]
-name = "op_env_sync"
+name = "opdot"
 version = "0.1.0"
 edition = "2021"
+license = "ISC"
+description = "A CLI for syncing environment variables using 1password"
+homepage = "https://github.com/alexanderflink/opdot"
+repository = "https://github.com/alexanderflink/opdot"
+readme = "README.md"
+exclude = ["npm", "package.json", "package-lock.json"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

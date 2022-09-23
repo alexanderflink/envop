@@ -167,7 +167,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f81c2b19eebbc4249b3ca6aff70ae05bf18d6a99b7cc63cf0248774e640565"
 
 [[package]]
-name = "op_env_sync"
+name = "opdot"
 version = "0.1.0"
 dependencies = [
  "argh",
