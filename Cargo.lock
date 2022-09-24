@@ -81,6 +81,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
 
 [[package]]
+name = "envop"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "glob",
+ "inquire",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,17 +176,6 @@ name = "newline-converter"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f81c2b19eebbc4249b3ca6aff70ae05bf18d6a99b7cc63cf0248774e640565"
-
-[[package]]
-name = "opdot"
-version = "0.1.0"
-dependencies = [
- "argh",
- "glob",
- "inquire",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "parking_lot"

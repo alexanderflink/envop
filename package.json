@@ -1,5 +1,5 @@
 {
-  "name": "opdot",
+  "name": "envop",
   "version": "0.1.0",
   "description": "A CLI for syncing environment variables using 1password",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alexanderflink/opdot.git"
+    "url": "git+https://github.com/alexanderflink/envop.git"
   },
   "keywords": [
     "env",
@@ -20,9 +20,9 @@
   "author": "Alexander Flink",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/alexanderflink/opdot/issues"
+    "url": "https://github.com/alexanderflink/envop/issues"
   },
-  "homepage": "https://github.com/alexanderflink/opdot#readme",
+  "homepage": "https://github.com/alexanderflink/envop#readme",
   "devDependencies": {
     "binary-install": "^1.0.6"
   }

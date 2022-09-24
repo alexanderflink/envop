@@ -1,11 +1,11 @@
 [package]
-name = "opdot"
+name = "envop"
 version = "0.1.0"
 edition = "2021"
 license = "ISC"
 description = "A CLI for syncing environment variables using 1password"
-homepage = "https://github.com/alexanderflink/opdot"
-repository = "https://github.com/alexanderflink/opdot"
+homepage = "https://github.com/alexanderflink/envop"
+repository = "https://github.com/alexanderflink/envop"
 readme = "README.md"
 exclude = ["npm", "package.json", "package-lock.json"]
 
