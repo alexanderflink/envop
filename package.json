@@ -30,7 +30,7 @@
     "url": "https://github.com/alexanderflink/envop/issues"
   },
   "homepage": "https://github.com/alexanderflink/envop#readme",
-  "devDependencies": {
+  "dependencies": {
     "binary-install": "^1.0.6"
   }
 }
