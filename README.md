@@ -9,7 +9,11 @@ This is a CLI for syncing environment variables using 1password and provisioning
 `brew install alexanderflink/envop/envop`
 
 ### Using npm
+To install locally in a project:
 `npm install envop --save-dev`
+
+Or globally:
+`npm install envop -g`
 
 ### Using cargo
 `cargo install envop`
