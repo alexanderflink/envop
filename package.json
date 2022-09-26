@@ -10,8 +10,7 @@
     "npm/**/*"
   ],
   "scripts": {
-    "postinstall": "node ./npm/install.js",
-    "preinstall": "node ./npm/uninstall.js"
+    "postinstall": "node ./npm/install.js"
   },
   "repository": {
     "type": "git",
