@@ -1,6 +1,6 @@
 {
   "name": "envop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A CLI for syncing environment variables using 1password",
   "main": "index.js",
   "bin": {

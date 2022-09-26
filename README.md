@@ -18,6 +18,9 @@ This is a CLI for syncing environment variables using 1password and provisioning
 - [1password CLI](https://1password.com/downloads/command-line/)
 
 ## Installation
+### Using homebrew
+`brew install alexanderflink/envop/envop`
+
 ### Using npm
 `npm install envop --save-dev`
 
