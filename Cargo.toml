@@ -1,6 +1,6 @@
 [package]
 name = "envop"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 license = "ISC"
 description = "A CLI for syncing environment variables using 1password"
