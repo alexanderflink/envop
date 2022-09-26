@@ -18,7 +18,7 @@ function getBinary() {
     const version = require('../package.json').version;
     const url = `https://github.com/alexanderflink/envop/releases/download/v${ version }/envop-${ platform }.tar.gz`;
     const name = 'envop';
-    return new Binary(url, { name });
+    return new Binary(name, url);
 }
 
 module.exports = getBinary;
