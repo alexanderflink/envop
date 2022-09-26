@@ -1,5 +1,5 @@
 # envop
-This is a CLI for syncing environment variables using 1password and provisioning files. Each environment (e.g staging or production) is stored in a separate section of an item in the 1password vault. Uses .provision files as templates for the environemnt files.
+This is a CLI for syncing environment variables using 1password and provisioning files. Each environment (e.g staging or production) is stored in a separate section of an item in the 1password vault. Uses .provision files as templates for the environment files.
 
 ## Requirements
 - [1password CLI](https://1password.com/downloads/command-line/)
