@@ -82,7 +82,7 @@ checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
 
 [[package]]
 name = "envop"
-version = "0.1.0"
+version = "1.0.5"
 dependencies = [
  "argh",
  "glob",
